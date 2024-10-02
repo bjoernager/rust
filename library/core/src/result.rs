@@ -514,6 +514,7 @@
 #![stable(feature = "rust1", since = "1.0.0")]
 
 use crate::iter::{self, FusedIterator, TrustedLen};
+use crate::mem::ManuallyDrop;
 use crate::ops::{self, ControlFlow, Deref, DerefMut};
 use crate::{convert, fmt, hint};
 
@@ -1481,11 +1482,15 @@ impl<T, E> Result<T, E> {
     #[inline]
     #[track_caller]
     #[stable(feature = "option_result_unwrap_unchecked", since = "1.58.0")]
-    pub unsafe fn unwrap_unchecked(self) -> T {
+    #[rustc_const_unstable(feature = "const_result_unwrap_unchecked", issue = "none")]
+    pub const unsafe fn unwrap_unchecked(self) -> T {
         match self {
             Ok(t) => t,
-            // SAFETY: the safety contract must be upheld by the caller.
-            Err(_) => unsafe { hint::unreachable_unchecked() },
+            Err(_) => {
+                let me = ManuallyDrop::new(self);
+                // SAFETY: Caller has guaranteed an instance of `Err`.
+                unsafe { hint::unreachable_unchecked() };
+            },
         }
     }
 
@@ -1512,10 +1517,14 @@ impl<T, E> Result<T, E> {
     #[inline]
     #[track_caller]
     #[stable(feature = "option_result_unwrap_unchecked", since = "1.58.0")]
-    pub unsafe fn unwrap_err_unchecked(self) -> E {
+    #[rustc_const_unstable(feature = "const_result_unwrap_unchecked", issue = "none")]
+    pub const unsafe fn unwrap_err_unchecked(self) -> E {
         match self {
-            // SAFETY: the safety contract must be upheld by the caller.
-            Ok(_) => unsafe { hint::unreachable_unchecked() },
+            Ok(_) => {
+                let me = ManuallyDrop::new(self);
+                // SAFETY: Caller has guaranteed an instance of `Err`.
+                unsafe { hint::unreachable_unchecked() };
+            },
             Err(e) => e,
         }
     }
