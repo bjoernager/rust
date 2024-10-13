@@ -7,7 +7,8 @@
 #![stable(feature = "rust1", since = "1.0.0")]
 
 use crate::cmp::Ordering::{self, Equal, Greater, Less};
-use crate::intrinsics::{exact_div, select_unpredictable, unchecked_sub};
+use crate::hint::unreachable_unchecked;
+use crate::intrinsics::{const_eval_select, exact_div, select_unpredictable, unchecked_sub};
 use crate::mem::{self, SizedTypeProperties};
 use crate::num::NonZero;
 use crate::ops::{Bound, OneSidedRange, Range, RangeBounds};
@@ -3671,8 +3672,9 @@ impl<T> [T] {
     /// [`split_at_mut`]: slice::split_at_mut
     #[doc(alias = "memcpy")]
     #[stable(feature = "copy_from_slice", since = "1.9.0")]
+    #[rustc_const_unstable(feature = "const_copy_from_slice", issue = "none")]
     #[track_caller]
-    pub fn copy_from_slice(&mut self, src: &[T])
+    pub const fn copy_from_slice(&mut self, src: &[T])
     where
         T: Copy,
     {
@@ -3681,17 +3683,25 @@ impl<T> [T] {
         #[cfg_attr(not(feature = "panic_immediate_abort"), inline(never), cold)]
         #[cfg_attr(feature = "panic_immediate_abort", inline)]
         #[track_caller]
-        fn len_mismatch_fail(dst_len: usize, src_len: usize) -> ! {
-            panic!(
-                "source slice length ({}) does not match destination slice length ({})",
-                src_len, dst_len,
-            );
-        }
+        const fn len_mismatch_fail(dst_len: usize, src_len: usize) -> ! {
+            const fn panic_at_const(_dst_len: usize, _src_len: usize) {
+                // Note that we cannot format in constant expressions.
+                panic!("destination slice cannot contain source slice");
+            }
 
+            fn panic_at_rt(dst_len: usize, src_len: usize) {
+                panic!(
+                    "source slice length ({src_len}) does not match destination slice length ({dst_len})",
+                );
+            }
+            // FIXME(const-hack): We would prefer to have streamlined panics when formatters become const-friendly.
+            const_eval_select((dst_len, src_len), panic_at_const, panic_at_rt);
+            // SAFETY: Neither `panic_at_const` nor `panic_at_rt` will ever return.
+            unsafe { unreachable_unchecked() }
+        }
         if self.len() != src.len() {
             len_mismatch_fail(self.len(), src.len());
         }
-
         // SAFETY: `self` is valid for `self.len()` elements by definition, and `src` was
         // checked to have the same length. The slices cannot overlap because
         // mutable references are exclusive.
