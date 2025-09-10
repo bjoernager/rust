@@ -1,9 +1,9 @@
 //! Representation of a float as the significant digits and exponent.
 
-use crate::num::dec2flt::float::RawFloat;
 use crate::num::dec2flt::fpu::set_precision;
+use crate::num::dec2flt::raw_float::RawFloat;
 
-const INT_POW10: [u64; 16] = [
+const INT_POW10: [u128; 16] = [
     1,
     10,
     100,
@@ -22,11 +22,11 @@ const INT_POW10: [u64; 16] = [
     1000000000000000,
 ];
 
-/// A floating point number with up to 64 bits of mantissa and an `i64` exponent.
+/// A floating point number with up to 128 bits of mantissa and an `i128` exponent.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Decimal {
-    pub exponent: i64,
-    pub mantissa: u64,
+    pub exponent: i128,
+    pub mantissa: u128,
     pub negative: bool,
     pub many_digits: bool,
 }
@@ -66,7 +66,7 @@ impl Decimal {
 
         let value = if self.exponent <= F::MAX_EXPONENT_FAST_PATH {
             // normal fast path
-            let value = F::from_u64(self.mantissa);
+            let value = F::from_u128(self.mantissa);
             if self.exponent < 0 {
                 value / F::pow10_fast_path((-self.exponent) as _)
             } else {
@@ -79,7 +79,7 @@ impl Decimal {
             if mantissa > F::MAX_MANTISSA_FAST_PATH {
                 return None;
             }
-            F::from_u64(mantissa) * F::pow10_fast_path(F::MAX_EXPONENT_FAST_PATH as _)
+            F::from_u128(mantissa) * F::pow10_fast_path(F::MAX_EXPONENT_FAST_PATH as _)
         };
 
         if self.negative { Some(-value) } else { Some(value) }

@@ -1,8 +1,8 @@
 //! Slow, fallback algorithm for cases the Eisel-Lemire algorithm cannot round.
 
-use crate::num::dec2flt::common::BiasedFp;
+use crate::num::dec2flt::common::BiasedFp128;
 use crate::num::dec2flt::decimal_seq::{DecimalSeq, parse_decimal_seq};
-use crate::num::dec2flt::float::RawFloat;
+use crate::num::dec2flt::raw_float::RawFloat;
 
 /// Parse the significant digits and biased, binary exponent of a float.
 ///
@@ -23,7 +23,7 @@ use crate::num::dec2flt::float::RawFloat;
 ///
 /// The algorithms described here are based on "Processing Long Numbers Quickly",
 /// available here: <https://arxiv.org/pdf/2101.11408.pdf#section.11>.
-pub(crate) fn parse_long_mantissa<F: RawFloat>(s: &[u8]) -> BiasedFp {
+pub(crate) fn parse_long_mantissa<F: RawFloat>(s: &[u8]) -> BiasedFp128 {
     const MAX_SHIFT: usize = 60;
     const NUM_POWERS: usize = 19;
     const POWERS: [u8; 19] =
@@ -33,8 +33,8 @@ pub(crate) fn parse_long_mantissa<F: RawFloat>(s: &[u8]) -> BiasedFp {
         if n < NUM_POWERS { POWERS[n] as usize } else { MAX_SHIFT }
     };
 
-    let fp_zero = BiasedFp::zero_pow2(0);
-    let fp_inf = BiasedFp::zero_pow2(F::INFINITE_POWER);
+    let fp_zero = BiasedFp128::zero_pow2(0);
+    let fp_inf = BiasedFp128::zero_pow2(F::INFINITE_POWER);
 
     let mut d = parse_decimal_seq(s);
 
@@ -74,36 +74,36 @@ pub(crate) fn parse_long_mantissa<F: RawFloat>(s: &[u8]) -> BiasedFp {
     }
     // We are now in the range [1/2 ... 1] but the binary format uses [1 ... 2].
     exp2 -= 1;
-    while F::EXP_MIN > exp2 {
-        let mut n = (F::EXP_MIN - exp2) as usize;
+    while F::MIN_EXPONENT > exp2 {
+        let mut n = (F::MIN_EXPONENT - exp2) as usize;
         if n > MAX_SHIFT {
             n = MAX_SHIFT;
         }
         d.right_shift(n);
         exp2 += n as i32;
     }
-    if (exp2 - F::EXP_MIN + 1) >= F::INFINITE_POWER {
+    if (exp2 - F::MIN_EXPONENT + 1) >= F::INFINITE_POWER {
         return fp_inf;
     }
     // Shift the decimal to the hidden bit, and then round the value
     // to get the high mantissa+1 bits.
-    d.left_shift(F::SIG_BITS as usize + 1);
+    d.left_shift(F::MANTISSA_BITS as usize + 1);
     let mut mantissa = d.round();
-    if mantissa >= (1_u64 << (F::SIG_BITS + 1)) {
+    if mantissa >= (1_u64 << (F::MANTISSA_BITS + 1)) {
         // Rounding up overflowed to the carry bit, need to
         // shift back to the hidden bit.
         d.right_shift(1);
         exp2 += 1;
         mantissa = d.round();
-        if (exp2 - F::EXP_MIN + 1) >= F::INFINITE_POWER {
+        if (exp2 - F::MIN_EXPONENT + 1) >= F::INFINITE_POWER {
             return fp_inf;
         }
     }
-    let mut power2 = exp2 - F::EXP_MIN + 1;
-    if mantissa < (1_u64 << F::SIG_BITS) {
+    let mut power2 = exp2 - F::MIN_EXPONENT + 1;
+    if mantissa < (1_u64 << F::MANTISSA_BITS) {
         power2 -= 1;
     }
     // Zero out all the bits above the explicit mantissa bits.
-    mantissa &= (1_u64 << F::SIG_BITS) - 1;
-    BiasedFp { m: mantissa, p_biased: power2 }
+    mantissa &= (1_u64 << F::MANTISSA_BITS) - 1;
+    BiasedFp128 { m: mantissa, p_biased: power2 }
 }

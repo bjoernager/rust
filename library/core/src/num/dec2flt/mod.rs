@@ -87,30 +87,31 @@
     issue = "none"
 )]
 
-use self::common::BiasedFp;
-use self::float::RawFloat;
-use self::lemire::compute_float;
-use self::parse::{parse_inf_nan, parse_number};
-use self::slow::parse_long_mantissa;
-use crate::error::Error;
-use crate::fmt;
-use crate::str::FromStr;
-
 mod common;
 pub mod decimal;
 pub mod decimal_seq;
 mod fpu;
 mod slow;
 mod table;
-// float is used in flt2dec, and all are used in unit tests.
-pub mod float;
+// `raw_float` is used in `flt2dec`, and all are used in unit tests.
 pub mod lemire;
+pub mod lemire_float;
 pub mod parse;
+pub mod raw_float;
+
+use self::common::BiasedFp64;
+use self::lemire::compute_float;
+use self::parse::{parse_inf_nan, parse_number};
+use self::raw_float::RawFloat;
+use self::slow::parse_long_mantissa;
+use crate::error::Error;
+use crate::fmt;
+use crate::str::FromStr;
 
 macro_rules! from_str_float_impl {
-    ($t:ty) => {
-        #[stable(feature = "rust1", since = "1.0.0")]
-        impl FromStr for $t {
+    ($($ty:ty)*) => {
+        $(#[stable(feature = "rust1", since = "1.0.0")]
+        impl FromStr for $ty {
             type Err = ParseFloatError;
 
             /// Converts a string in base 10 to a float.
@@ -151,14 +152,14 @@ macro_rules! from_str_float_impl {
             ///
             /// # Arguments
             ///
-            /// * src - A string
+            /// * `s` - A string
             ///
             /// # Return value
             ///
             /// `Err(ParseFloatError)` if the string did not represent a valid
             /// number. Otherwise, `Ok(n)` where `n` is the closest
             /// representable floating-point number to the number represented
-            /// by `src` (following the same rules for rounding as for the
+            /// by `s` (following the same rules for rounding as for the
             /// results of primitive operations).
             // We add the `#[inline(never)]` attribute, since its content will
             // be filled with that of `dec2flt`, which has #[inline(always)].
@@ -167,10 +168,10 @@ macro_rules! from_str_float_impl {
             // generation of `dec2flt`, despite the fact only a maximum of 2
             // possible instances can ever exist. Adding #[inline(never)] avoids this.
             #[inline(never)]
-            fn from_str(src: &str) -> Result<Self, ParseFloatError> {
-                dec2flt(src)
+            fn from_str(s: &str) -> Result<Self, ParseFloatError> {
+                dec2flt(s)
             }
-        }
+        })*
     };
 }
 
@@ -178,6 +179,8 @@ macro_rules! from_str_float_impl {
 from_str_float_impl!(f16);
 from_str_float_impl!(f32);
 from_str_float_impl!(f64);
+#[cfg(target_has_reliable_f128)]
+from_str_float_impl!(f128);
 
 // FIXME(f16_f128): A fallback is used when the backend+target does not support f16 well, in order
 // to avoid ICEs.
@@ -187,8 +190,18 @@ impl FromStr for f16 {
     type Err = ParseFloatError;
 
     #[inline]
-    fn from_str(_src: &str) -> Result<Self, ParseFloatError> {
-        unimplemented!("requires target_has_reliable_f16")
+    fn from_str(_s: &str) -> Result<Self, ParseFloatError> {
+        unimplemented!("parsing strings as `f16` requires `target_has_reliable_f16`")
+    }
+}
+
+#[cfg(not(target_has_reliable_f128))]
+impl FromStr for f128 {
+    type Err = ParseFloatError;
+
+    #[inline]
+    fn from_str(_s: &str) -> Result<Self, ParseFloatError> {
+        unimplemented!("parsing strings as `f128` requires `target_has_reliable_f128`")
     }
 }
 
@@ -244,8 +257,8 @@ pub fn pfe_invalid() -> ParseFloatError {
     ParseFloatError { kind: FloatErrorKind::Invalid }
 }
 
-/// Converts a `BiasedFp` to the closest machine float type.
-fn biased_fp_to_float<F: RawFloat>(x: BiasedFp) -> F {
+/// Converts a `BiasedFp64` to the closest machine float type.
+fn biased_fp_to_float<F: RawFloat>(x: BiasedFp64) -> F {
     let mut word = x.m;
     word |= (x.p_biased as u64) << F::SIG_BITS;
     F::from_u64_bits(word)

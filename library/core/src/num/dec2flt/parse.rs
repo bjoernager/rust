@@ -2,7 +2,7 @@
 
 use crate::num::dec2flt::common::{ByteSlice, is_8digits};
 use crate::num::dec2flt::decimal::Decimal;
-use crate::num::dec2flt::float::RawFloat;
+use crate::num::dec2flt::raw_float::RawFloat;
 
 const MIN_19DIGIT_INT: u64 = 100_0000_0000_0000_0000;
 
