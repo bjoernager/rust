@@ -93,6 +93,24 @@ impl const From<char> for u128 {
     }
 }
 
+#[stable(feature = "int_from_char", since = CURRENT_RUSTC_VERSION)]
+#[rustc_const_unstable(feature = "const_convert", issue = "143773")]
+impl const From<char> for i64 {
+    #[inline]
+    fn from(c: char) -> Self {
+        c as i64
+    }
+}
+
+#[stable(feature = "int_from_char", since = CURRENT_RUSTC_VERSION)]
+#[rustc_const_unstable(feature = "const_convert", issue = "143773")]
+impl const From<char> for i128 {
+    #[inline]
+    fn from(c: char) -> Self {
+        c as i128
+    }
+}
+
 /// Maps a `char` with code point in U+0000..=U+00FF to a byte in 0x00..=0xFF with same value,
 /// failing if the code point is greater than U+00FF.
 ///
